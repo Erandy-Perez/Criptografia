@@ -1,3 +1,18 @@
+"""
+wallet_keystore.py
+Cold Wallet – Key Management Module (Part A)
+Cryptography 2026-1
+--------------------------------------------------------
+Implements:
+    - Ed25519 key generation
+    - Argon2id-based key derivation
+    - AES-256-GCM encryption for private key storage
+    - Keystore JSON format required by the project
+    - File checksum (SHA-256)
+    - Bitcoin-style address derivation (SHA256 → RIPEMD160)
+--------------------------------------------------------
+"""
+
 import os
 import json
 import base64
@@ -11,26 +26,36 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from argon2.low_level import hash_secret_raw, Type as Argon2Type
 
 
-# --------------------- Utilidades Base64 ------------------------
+# ================================================================
+# Base64 Helpers
+# ================================================================
 
-def b64e(data: bytes) -> str:
+def _b64e(data: bytes) -> str:
+    """Encode bytes to Base64 ASCII string."""
     return base64.b64encode(data).decode("ascii")
 
 
-def b64d(data_b64: str) -> bytes:
+def _b64d(data_b64: str) -> bytes:
+    """Decode Base64 ASCII string to bytes."""
     return base64.b64decode(data_b64.encode("ascii"))
 
 
-# --------------------- Derivación Argon2id ------------------------
+# ================================================================
+# KDF: Argon2id
+# ================================================================
 
-def derive_key_argon2id(passphrase: str, salt: bytes,
-                        t_cost: int = 3,
-                        m_cost: int = 64 * 1024,
-                        p: int = 1):
+def derive_encryption_key(passphrase: str,
+                          salt: bytes,
+                          t_cost: int = 3,
+                          m_cost: int = 64 * 1024,
+                          p: int = 1):
     """
-    Deriva una clave de 32 bytes desde una passphrase usando Argon2id.
+    Derives a 256-bit AES key using Argon2id.
+    Returns:
+        aes_key : 32-byte key
+        kdf_params : dict (serializable)
     """
-    key = hash_secret_raw(
+    aes_key = hash_secret_raw(
         secret=passphrase.encode("utf-8"),
         salt=salt,
         time_cost=t_cost,
@@ -40,55 +65,67 @@ def derive_key_argon2id(passphrase: str, salt: bytes,
         type=Argon2Type.ID,
     )
 
-    params = {
-        "salt_b64": b64e(salt),
+    return aes_key, {
+        "salt_b64": _b64e(salt),
         "t_cost": t_cost,
         "m_cost": m_cost,
         "p": p,
     }
 
-    return key, params
 
-
-# ----------------- Cifrado / Descifrado AES-256-GCM --------------
+# ================================================================
+# AEAD: AES-256-GCM
+# ================================================================
 
 def encrypt_private_key(aes_key: bytes, private_key_bytes: bytes):
     """
-    Cifra la llave privada con AES-256-GCM.
-    Devuelve: (nonce, ciphertext, tag)
+    Encrypts a private key using AES-256-GCM.
+    Returns: (nonce, ciphertext, tag)
     """
-    nonce = os.urandom(12)  # tamaño recomendado para GCM
+    nonce = os.urandom(12)
     aesgcm = AESGCM(aes_key)
     ct = aesgcm.encrypt(nonce, private_key_bytes, None)
 
-    ciphertext = ct[:-16]  # los últimos 16 bytes son el TAG
-    tag = ct[-16:]
-
-    return nonce, ciphertext, tag
+    return nonce, ct[:-16], ct[-16:]  # ciphertext, tag
 
 
-def decrypt_private_key(aes_key: bytes, nonce: bytes,
-                        ciphertext: bytes, tag: bytes):
+def decrypt_private_key(aes_key: bytes,
+                        nonce: bytes,
+                        ciphertext: bytes,
+                        tag: bytes) -> bytes:
     aesgcm = AESGCM(aes_key)
     return aesgcm.decrypt(nonce, ciphertext + tag, None)
 
 
-# ------------- Derivación de dirección (estilo Bitcoin) ------------
+# ================================================================
+# Address Derivation (Bitcoin-style)
+# ================================================================
 
-def pubkey_to_address(pubkey_bytes: bytes) -> str:
+def derive_address(pubkey_bytes: bytes) -> str:
     """
-    Dirección = RIPEMD-160(SHA-256(pubkey)) en hexadecimal.
-    Cumple con: "Persist public keys and a derived address".
+    Address = RIPEMD-160(SHA-256(pubkey)), hex string.
     """
     sha = hashlib.sha256(pubkey_bytes).digest()
     ripe = hashlib.new("ripemd160", sha).digest()
     return ripe.hex()
 
 
-# ------------------- Creación del Keystore ----------------------
+# ================================================================
+# Keystore Creation
+# ================================================================
 
 def create_keystore(passphrase: str) -> dict:
-    # 1. Generar par de llaves Ed25519
+    """
+    Generates:
+        - Ed25519 keypair
+        - KDF parameters + derived AES key
+        - Encrypted private key
+        - Address, pubkey, metadata
+        - Checksum (SHA-256)
+    Returns: dict compatible with the project specification.
+    """
+
+    # 1. Ed25519 key generation
     private_key = ed25519.Ed25519PrivateKey.generate()
     public_key = private_key.public_key()
 
@@ -103,49 +140,52 @@ def create_keystore(passphrase: str) -> dict:
         format=serialization.PublicFormat.Raw,
     )
 
-    # 2. Derivar clave de cifrado con Argon2id
+    # 2. Argon2id key derivation
     salt = os.urandom(16)
-    aes_key, kdf_params = derive_key_argon2id(passphrase, salt)
+    aes_key, kdf_params = derive_encryption_key(passphrase, salt)
 
-    # 3. Cifrar la llave privada con AES-256-GCM
+    # 3. Encrypt private key
     nonce, ciphertext, tag = encrypt_private_key(aes_key, private_key_bytes)
 
-    # 4. Derivar dirección a partir del public key
-    address = pubkey_to_address(pubkey_bytes)
+    # Zeroization (best-effort)
+    del aes_key
 
-    # 5. Timestamp (formato local ISO)
-    created_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    # 4. Address from public key
+    address = derive_address(pubkey_bytes)
 
-    # 6. Crear keystore SIN checksum aún
+    # 5. Build keystore (without checksum)
     keystore = {
         "kdf": "Argon2id",
         "kdf_params": kdf_params,
         "cipher": "AES-256-GCM",
-        "cipher_params": {"nonce_b64": b64e(nonce)},
-        "ciphertext_b64": b64e(ciphertext),
-        "tag_b64": b64e(tag),
-        "pubkey_b64": b64e(pubkey_bytes),
-        "created": created_time,
+        "cipher_params": {
+            "nonce_b64": _b64e(nonce)
+        },
+        "ciphertext_b64": _b64e(ciphertext),
+        "tag_b64": _b64e(tag),
+        "pubkey_b64": _b64e(pubkey_bytes),
+        "created": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
         "scheme": "Ed25519",
-        "address": address  # requerido por la consigna (derived address)
+        "address": address,
     }
 
-    # 7. Crear checksum SHA-256 del archivo (sin el propio checksum)
-    keystore_bytes = json.dumps(
-        keystore,
-        sort_keys=True,
-        separators=(",", ":")
+    # 6. Add checksum
+    ks_bytes = json.dumps(
+        keystore, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
 
-    checksum = hashlib.sha256(keystore_bytes).hexdigest()
+    checksum = hashlib.sha256(ks_bytes).hexdigest()
     keystore["checksum"] = f"SHA256:{checksum}"
 
     return keystore
 
 
-# ------------------- Guardar / Cargar JSON -------------------------
+# ================================================================
+# Keystore File I/O
+# ================================================================
 
 def save_keystore(keystore: dict, path: str):
+    """Write keystore to disk (UTF-8 JSON)."""
     with open(path, "w", encoding="utf-8") as f:
         json.dump(keystore, f, indent=2, sort_keys=True)
 
@@ -155,74 +195,69 @@ def load_keystore(path: str) -> dict:
         return json.load(f)
 
 
-# ------ Cargar y descifrar privada (necesario para parte B luego) --
+# ================================================================
+# Private Key Recovery
+# ================================================================
 
-def load_private_key_from_keystore(keystore: dict, passphrase: str):
+def load_private_key(keystore: dict, passphrase: str):
     """
-    Verifica el checksum, re-deriva la clave AES con Argon2id
-    y descifra la llave privada almacenada.
+    Verifies checksum, re-derives key, decrypts private key.
+    Returns Ed25519PrivateKey object.
     """
-    # 1. Verificación de checksum
-    checksum_stored = keystore.get("checksum")
-    if not checksum_stored or not checksum_stored.startswith("SHA256:"):
-        raise ValueError("Checksum faltante o inválido.")
 
-    checksum_value = checksum_stored.split(":", 1)[1]
+    # 1. Checksum verification
+    stored_sum = keystore["checksum"].split(":", 1)[1]
+    tmp = dict(keystore)
+    tmp.pop("checksum")
 
-    # Recalcular checksum sin el campo checksum
-    keystore_copy = dict(keystore)
-    keystore_copy.pop("checksum", None)
+    recalculated = hashlib.sha256(
+        json.dumps(tmp, sort_keys=True, separators=(",", ":"))
+        .encode("utf-8")
+    ).hexdigest()
 
-    keystore_bytes = json.dumps(
-        keystore_copy,
-        sort_keys=True,
-        separators=(",", ":")
-    ).encode("utf-8")
+    if recalculated != stored_sum:
+        raise ValueError("Keystore integrity check failed.")
 
-    checksum_calc = hashlib.sha256(keystore_bytes).hexdigest()
+    # 2. Re-derive AES key
+    params = keystore["kdf_params"]
+    salt = _b64d(params["salt_b64"])
 
-    if checksum_calc != checksum_value:
-        raise ValueError("El archivo del keystore fue modificado o está corrupto.")
-
-    # 2. Re-derivar clave AES desde la passphrase y el salt
-    kdf_params = keystore["kdf_params"]
-    salt = b64d(kdf_params["salt_b64"])
-
-    aes_key, _ = derive_key_argon2id(
+    aes_key, _ = derive_encryption_key(
         passphrase,
         salt,
-        t_cost=kdf_params["t_cost"],
-        m_cost=kdf_params["m_cost"],
-        p=kdf_params["p"],
+        params["t_cost"],
+        params["m_cost"],
+        params["p"],
     )
 
-    # 3. Recuperar parámetros de cifrado
-    nonce = b64d(keystore["cipher_params"]["nonce_b64"])
-    ciphertext = b64d(keystore["ciphertext_b64"])
-    tag = b64d(keystore["tag_b64"])
+    # 3. Decrypt private key
+    nonce = _b64d(keystore["cipher_params"]["nonce_b64"])
+    ciphertext = _b64d(keystore["ciphertext_b64"])
+    tag = _b64d(keystore["tag_b64"])
 
-    # 4. Descifrar bytes de la private key
     private_key_bytes = decrypt_private_key(aes_key, nonce, ciphertext, tag)
 
-    # 5. Reconstruir objeto Ed25519
-    private_key = ed25519.Ed25519PrivateKey.from_private_bytes(private_key_bytes)
-    return private_key
+    # Zeroize AES key (best effort)
+    del aes_key
+
+    return ed25519.Ed25519PrivateKey.from_private_bytes(private_key_bytes)
 
 
-# --------------------- Programa Principal -------------------------
+# ================================================================
+# CLI (Simple Demo for Part A Only)
+# ================================================================
 
 if __name__ == "__main__":
-    # Solicitar passphrase al usuario
-    passphrase = input("Ingrese una passphrase: ")
+    print("\n=== Cold Wallet – Part A: Key Management ===")
+    passphrase = input("Enter passphrase: ")
 
-    # Crear el keystore (Parte A)
-    keystore = create_keystore(passphrase)
+    ks = create_keystore(passphrase)
+    filename = "keystore.json"
+    save_keystore(ks, filename)
 
-    # Guardar archivo
-    filename = "keystore_A.json"
-    save_keystore(keystore, filename)
+    print("\nKeystore successfully created.")
+    print(f"→ File: {filename}")
+    print(f"→ Address: {ks['address']}")
+    print(f"→ Public Key (Base64): {ks['pubkey_b64']}")
+    print("===========================================\n")
 
-    print("Keystore creado correctamente (Parte A).")
-    print(f"Archivo generado: {filename}")
-    print(f"Dirección derivada (Bitcoin-style): {keystore['address']}")
-    print(f"Public key (base64): {keystore['pubkey_b64']}")
