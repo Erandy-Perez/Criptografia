@@ -74,32 +74,65 @@ def derived_address_from_pubkey(pubkey_bytes, tx_from_address):
 
 
         
+def check_source_sequence(origin_address, sequence_string):
 
+    sequence_int = int(sequence_string)
+    
+    if origin_address not in nonce_tracker:
+        nonce_tracker[origin_address] = sequence_int
+
+        return True
+    else:
+        print("Repeated Nonce")
+
+    last_seen = nonce_tracker[origin_address]
+
+    if sequence_int > last_seen: #Verificar Nonce actual
+        nonce_tracker[origin_address] = sequence_int
+        return True
+    else:
+        print("Old Nonce")
+    
+    return False
     
 
-
-
-
-
+    
 if __name__ == "__main__":
 
-    sig_tx = input("\nEnter signed transaction path: ")
+    nonce_tracker = {}
+
+    sig_tx = input("\nEnter signed transaction path: ").strip()
     tx_dict, pubkey_bytes, signature_bytes = load_signed_file(sig_tx)
 
     canonical_tx = canonical_signed_json(tx_dict)
     #print(f"\n{canonical_tx}\n")  # Verificación
     #print(pubkey_bytes)            #Verificación
     
+
+
+    
     if verify_signature(pubkey_bytes, signature_bytes, canonical_tx) == False:
-        print("Invalid transaction.\n")
+        print("Invalid transaction\n")
         exit()   
 
     if derived_address_from_pubkey(pubkey_bytes, tx_dict["from"]) == False:
         print("The address does not match\n")
         exit()
     else:
-        print("Address verified\n")
+        print("Address verified")
+
+    if check_source_sequence(tx_dict["from"], tx_dict["nonce"]) == False:
+        print("Invalid nonce")
+        exit()
+    else:
+        print("Nonce verified")
+
+
+    print("\nTransaction accepted \n")
 
 
 
-       
+
+
+
+

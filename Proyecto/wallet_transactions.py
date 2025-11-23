@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives.asymmetric import ed25519
 from wallet_A import (
     load_keystore,
     load_private_key,
-    b64e as _b64e      # tu archivo usa b64e, no _b64e
+    _b64e     
 )
 
 
