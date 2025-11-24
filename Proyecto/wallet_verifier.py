@@ -1,4 +1,3 @@
-
 import json
 import base64
 import hashlib
@@ -73,11 +72,11 @@ def load_signed_file(tx_location):
                print("Invalid timestamp format")
                return None
                
-           #Verifica que nonce sea número
+           #Verificar que nonce sea número
            if not ensure_int("nonce", data_tx["tx"]["nonce"]):
                return None
            
-           #Verifica que value sea número
+           #Verificar que value sea número
            if not ensure_int("value", data_tx["tx"]["value"]):
                return None
             
@@ -88,7 +87,7 @@ def load_signed_file(tx_location):
            output_pubkey_b64 = data_tx["pubkey_b64"]
            output_signature_b64 = data_tx["signature_b64"]
  
-            #Verifica b64
+            #Verificar b64
            pubkey_bytes = safe_b64decode("public key", output_pubkey_b64)
            if pubkey_bytes is None:
                return None
@@ -177,50 +176,50 @@ def check_source_sequence(origin_address, sequence_string):
     else:
         print("Old nonce")
     return False
+
+def process_transaction(tx_dict, pubkey_bytes, signature_bytes, canonical_tx):
     
+    # 1. Verificar firma
+    if not verify_signature(pubkey_bytes, signature_bytes, canonical_tx):
+        return False
+    
+    # 2. Verificar dirección
+    if not derived_address_from_pubkey(pubkey_bytes, tx_dict["from"]):
+        print("The address does not match\n")
+        return False
+    else:
+        print("Address verified\n")
 
-
-
-
+    # 3. Verificar nonce
+    if not check_source_sequence(tx_dict["from"], tx_dict["nonce"]):
+        print("Invalid nonce\n")
+        return False
+    
+    return True
+    
 
 if __name__ == "__main__":
 
     nonce_tracker = {}
 
-    sig_tx = input("\nEnter signed transaction path: ").strip()
+    while True:
 
-    result = load_signed_file(sig_tx)
+        sig_tx = input("\nEnter signed transaction path (or 'exit' to quit): ").strip()
 
-    if result is None:
-        print("Transaction rejected.\n")
-        exit()
+        if sig_tx.lower() == "exit":
+            print("Exiting verifier.\n")
+            break
 
-    tx_dict, pubkey_bytes, signature_bytes = result
+        result = load_signed_file(sig_tx)
 
-    canonical_tx = canonical_signed_json(tx_dict)
-    #print(f"\n{canonical_tx}\n")  # Verificación
-    #print(pubkey_bytes)            #Verificación
-  
-    if verify_signature(pubkey_bytes, signature_bytes, canonical_tx) == False:
-        print("Invalid transaction\n")
-        exit()   
+        if result is None:
+            print("Transaction rejected.\n")
+            continue
 
-    if derived_address_from_pubkey(pubkey_bytes, tx_dict["from"]) == False:
-        print("The address does not match\n")
-        exit()
-    else:
-        print("Address verified\n")
+        tx_dict, pubkey_bytes, signature_bytes = result
+        canonical_tx = canonical_signed_json(tx_dict)
 
-    if check_source_sequence(tx_dict["from"], tx_dict["nonce"]) == False:
-        print("Invalid nonce\n")
-        exit()
-
-
-    print("Transaction accepted \n")
-
-
-
-
-
-
-
+        if process_transaction(tx_dict, pubkey_bytes, signature_bytes, canonical_tx):
+            print("Transaction accepted\n")
+        else:
+            print("Transaction rejected\n")
