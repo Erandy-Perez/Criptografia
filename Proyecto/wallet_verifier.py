@@ -7,21 +7,103 @@ import cryptography.hazmat.primitives.asymmetric.ed25519 as ed_module
 from cryptography.exceptions import InvalidSignature
 
 
+#pubkey_b64 y sig_scheme
+  
+def safe_b64decode(label, b64_string):
+    try:
+        return base64.b64decode(b64_string)
+    except:
+        print(f"Error decoding Base64 for {label}")
+        return None
+    
+def check_length(label, byte_string, expected_len):
+        if len(byte_string) != expected_len:
+            print(f"Invalid {label} length")
+            return False
+        return True
+
+    #Nonce y Value
+def ensure_int(label, value):
+    try:
+        int(value)
+        return True
+    except:
+        print(f"{label} is not a valid number")
+        return False
+    
+
+
+
 # reading the tx file
 def load_signed_file(tx_location):
     try:
 
         with open(tx_location ,'r') as tx_file:
-           datos_tx = json.load(tx_file)      #diccionario
+           data_tx = json.load(tx_file)      #diccionario
+
+           #Verificar que los datos existen en signed_tx.json
+           required_data_tx = [ "tx", "pubkey_b64", "sig_scheme", "signature_b64"]
+           for required_data in required_data_tx:
+               if required_data not in data_tx:
+                print("Missing field:", required_data)
+                return None
+               
+
+           #Verifica que sig_scheme sea el adecuado   
+           if data_tx["sig_scheme"] != "Ed25519":
+               print("Unsupported signature scheme:", data_tx["sig_scheme"])
+               return None
+               
+            
+            #Verificar que tx es diccionario
+           if not isinstance(data_tx["tx"], dict):
+                print("Invalid tx structure")
+                return None
+           
+            #Verifica que existan los datos en "tx"
+           required_tx_fields = ["from", "to", "value", "nonce", "timestamp"]
+           for required_tx in required_tx_fields:
+               if required_tx not in data_tx["tx"]:
+                   print("Missing tx field:", required_tx)
+                   return None
+           #Verifica formato de timestamp
+           try:
+               datetime.fromisoformat(data_tx["tx"]["timestamp"].replace("Z",""))
+           except:
+               print("Invalid timestamp format")
+               return None
+               
+           #Verifica que nonce sea número
+           if not ensure_int("nonce", data_tx["tx"]["nonce"]):
+               return None
+           
+           #Verifica que value sea número
+           if not ensure_int("value", data_tx["tx"]["value"]):
+               return None
+            
+           
 
 
-           output_tx = datos_tx["tx"] # Muestra el diccionario tx
-           output_pubkey_b64 = datos_tx["pubkey_b64"]
-           output_signature_b64 = datos_tx["signature_b64"]
-           pubkey_bytes = base64.b64decode(output_pubkey_b64) # De base_64 a bytes
-           signature_bytes = base64.b64decode(output_signature_b64)
+           output_tx = data_tx["tx"] # Muestra el diccionario tx
+           output_pubkey_b64 = data_tx["pubkey_b64"]
+           output_signature_b64 = data_tx["signature_b64"]
+ 
+            #Verifica b64
+           pubkey_bytes = safe_b64decode("public key", output_pubkey_b64)
+           if pubkey_bytes is None:
+               return None
+
+           signature_bytes = safe_b64decode("signature", output_signature_b64)
+           if signature_bytes is None:
+               return None
+           #Verifica longitud
+           if not check_length("public key", pubkey_bytes, 32):
+                return None
+
+           if not check_length("signature", signature_bytes, 64):
+                return None
            #print(output_tx)  # Muestra de la salida de tx
-           #processed_output = print(json.dumps(datos_tx, indent=2))# muestra en terminal, ELIMINAR DESPUÉS
+           #processed_output = print(json.dumps(data_tx, indent=2))# muestra en terminal, ELIMINAR DESPUÉS
 
     except FileNotFoundError:
         print(f"ERROR: No se encontró el archivo '{tx_location}' en la ruta\n")
@@ -31,7 +113,10 @@ def load_signed_file(tx_location):
         print(f"ERROR: El archivo '{tx_location}' no es un JSON válido.\n")
         return None
     
+
     return output_tx, pubkey_bytes, signature_bytes
+
+
 
 def canonical_signed_json(data: dict) -> bytes:
     """
@@ -80,7 +165,6 @@ def check_source_sequence(origin_address, sequence_string):
     
     if origin_address not in nonce_tracker:
         nonce_tracker[origin_address] = sequence_int
-
         return True
     else:
         print("Repeated Nonce")
@@ -91,26 +175,32 @@ def check_source_sequence(origin_address, sequence_string):
         nonce_tracker[origin_address] = sequence_int
         return True
     else:
-        print("Old Nonce")
-    
+        print("Old nonce")
     return False
     
 
-    
+
+
+
+
 if __name__ == "__main__":
 
     nonce_tracker = {}
 
     sig_tx = input("\nEnter signed transaction path: ").strip()
-    tx_dict, pubkey_bytes, signature_bytes = load_signed_file(sig_tx)
+
+    result = load_signed_file(sig_tx)
+
+    if result is None:
+        print("Transaction rejected.\n")
+        exit()
+
+    tx_dict, pubkey_bytes, signature_bytes = result
 
     canonical_tx = canonical_signed_json(tx_dict)
     #print(f"\n{canonical_tx}\n")  # Verificación
     #print(pubkey_bytes)            #Verificación
-    
-
-
-    
+  
     if verify_signature(pubkey_bytes, signature_bytes, canonical_tx) == False:
         print("Invalid transaction\n")
         exit()   
@@ -119,16 +209,14 @@ if __name__ == "__main__":
         print("The address does not match\n")
         exit()
     else:
-        print("Address verified")
+        print("Address verified\n")
 
     if check_source_sequence(tx_dict["from"], tx_dict["nonce"]) == False:
-        print("Invalid nonce")
+        print("Invalid nonce\n")
         exit()
-    else:
-        print("Nonce verified")
 
 
-    print("\nTransaction accepted \n")
+    print("Transaction accepted \n")
 
 
 
