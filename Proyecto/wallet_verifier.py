@@ -165,16 +165,16 @@ def check_source_sequence(origin_address, sequence_string):
     if origin_address not in nonce_tracker:
         nonce_tracker[origin_address] = sequence_int
         return True
-    else:
-        print("Repeated Nonce")
 
     last_seen = nonce_tracker[origin_address]
-
-    if sequence_int > last_seen: #Verificar Nonce actual
+    
+    if sequence_int > last_seen:
         nonce_tracker[origin_address] = sequence_int
         return True
-    else:
-        print("Old nonce")
+    elif sequence_int == last_seen:
+        print("Invalid nonce: Repeated Nonce")
+    else: # sequence_int < last_seen
+        print("Invalid nonce: Old nonce")
     return False
 
 def process_transaction(tx_dict, pubkey_bytes, signature_bytes, canonical_tx):
