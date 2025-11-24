@@ -17,7 +17,7 @@ import os
 import json
 import base64
 import hashlib
-from datetime import datetime
+from datetime import datetime, UTC
 
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
@@ -164,7 +164,7 @@ def create_keystore(passphrase: str) -> dict:
         "ciphertext_b64": _b64e(ciphertext),
         "tag_b64": _b64e(tag),
         "pubkey_b64": _b64e(pubkey_bytes),
-        "created": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "created": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "scheme": "Ed25519",
         "address": address,
     }
@@ -185,14 +185,50 @@ def create_keystore(passphrase: str) -> dict:
 # ================================================================
 
 def save_keystore(keystore: dict, path: str):
-    """Write keystore to disk (UTF-8 JSON)."""
+    """
+    Append keystore to a single JSON file.
+
+    Estructura del archivo:
+    - Si no existe: [ keystore ]
+    - Si existe y es lista: se agrega al final.
+    - Si existe y es un dict (viejo formato): se convierte en lista [dict, keystore].
+    """
+    data = []
+
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+                if isinstance(existing, list):
+                    data = existing
+                elif isinstance(existing, dict):
+                    data = [existing]
+        except (json.JSONDecodeError, OSError):
+            # Si está corrupto o vacío, empezamos lista nueva
+            data = []
+
+    data.append(keystore)
+
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(keystore, f, indent=2, sort_keys=True)
+        json.dump(data, f, indent=2, sort_keys=True)
 
 
 def load_keystore(path: str) -> dict:
+    """
+    Carga un único keystore (por compatibilidad).
+    Si el archivo contiene una lista, se devuelve el último.
+    """
     with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+
+    if isinstance(data, list):
+        if not data:
+            raise ValueError("Keystore file is empty.")
+        return data[-1]  # último keystore
+    elif isinstance(data, dict):
+        return data
+    else:
+        raise ValueError("Invalid keystore file format.")
 
 
 # ================================================================
@@ -237,10 +273,20 @@ def load_private_key(keystore: dict, passphrase: str):
 
     private_key_bytes = decrypt_private_key(aes_key, nonce, ciphertext, tag)
 
-    # Zeroize AES key (best effort)
-    del aes_key
+    del aes_key  # best-effort zeroization
 
     return ed25519.Ed25519PrivateKey.from_private_bytes(private_key_bytes)
+
+
+# ================================================================
+# Passphrase Validation
+# ================================================================
+
+def validate_passphrase(p: str) -> bool:
+    """Require at least one uppercase letter and one symbol."""
+    has_upper = any(ch.isupper() for ch in p)
+    has_symbol = any(not ch.isalnum() for ch in p)
+    return has_upper and has_symbol
 
 
 # ================================================================
@@ -249,10 +295,24 @@ def load_private_key(keystore: dict, passphrase: str):
 
 if __name__ == "__main__":
     print("\n=== Cold Wallet – Part A: Key Management ===")
-    passphrase = input("Enter passphrase: ")
+
+    # --------- Passphrase validation ----------
+    while True:
+        passphrase = input("Enter passphrase (must include 1 uppercase and 1 symbol): ")
+
+        if validate_passphrase(passphrase):
+            break
+        else:
+            print("❌ Invalid passphrase. It must contain at least:")
+            print("   - One uppercase letter (A-Z)")
+            print("   - One symbol (!@#$%*/ etc.)\n")
+    # ------------------------------------------
 
     ks = create_keystore(passphrase)
+
+    # Siempre usar un solo archivo:
     filename = "keystore.json"
+
     save_keystore(ks, filename)
 
     print("\nKeystore successfully created.")
@@ -260,4 +320,3 @@ if __name__ == "__main__":
     print(f"→ Address: {ks['address']}")
     print(f"→ Public Key (Base64): {ks['pubkey_b64']}")
     print("===========================================\n")
-
