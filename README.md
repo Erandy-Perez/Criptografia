@@ -2,9 +2,9 @@
 
 Implementación de una billetera fría (cold wallet) criptográfica con funcionalidades completas de gestión de claves, firma y verificación de transacciones.
 
-## Instalación
+# Instalación
 
-
+```bash
 # Clonar repositorio
 git clone <repo-url>
 cd cold-wallet
@@ -15,8 +15,9 @@ pip install -r requirements.txt
 # Instalar como comando global (opcional)
 pip install -e .
 
-
-## Uso 
+```
+# Uso
+```bash
 # Crear nuevo keystore
 wallet init
 
@@ -34,9 +35,10 @@ wallet list
 
 # Estado del wallet
 wallet status
+```
+# Estructura de archivos
 
-## Estructura de archivos 
-
+``` bash
 cold-wallet/
 ├── main.py              # CLI principal
 ├── wallet_A.py          # Gestión de claves
@@ -48,5 +50,3 @@ cold-wallet/
 ├── verified/           # Transacciones verificadas
 ├── tests/              # Pruebas unitarias
 └── README.md
-
-
