@@ -4,7 +4,7 @@ Implementación de una billetera fría (cold wallet) criptográfica con funciona
 
 ## Instalación
 
-```bash
+
 # Clonar repositorio
 git clone <repo-url>
 cd cold-wallet
