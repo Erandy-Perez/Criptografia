@@ -1,13 +1,52 @@
-# oø Criptografía – Proyecto Final  
-## Cold Crypto Wallet (Accounts Model)
+# Cold Wallet - Proyecto Criptografía 2026-1
 
-Este repositorio contiene el **proyecto final** de la materia **Criptografía**, donde se implementa —desde cero— un *cold crypto wallet* basado en el modelo de cuentas (similar a Ethereum).  
-El propósito es aplicar conceptos criptográficos modernos para construir un sistema real que permita:
+Implementación de una billetera fría (cold wallet) criptográfica con funcionalidades completas de gestión de claves, firma y verificación de transacciones.
 
-- Generar y manejar llaves criptográficas de forma segura  
-- Firmar transacciones digitalmente  
-- Verificar transacciones recibidas  
-- Simular un flujo de envío/recepción sin conexión a la red  
+## Instalación
 
-Todo el código está desarrollado en **Python**, únicamente utilizando primitivas criptográficas confiables y sin depender de frameworks de wallets.
+```bash
+# Clonar repositorio
+git clone <repo-url>
+cd cold-wallet
+
+# Instalar dependencias
+pip install -r requirements.txt
+
+# Instalar como comando global (opcional)
+pip install -e .
+
+
+## Uso 
+# Crear nuevo keystore
+wallet init
+
+# Mostrar dirección pública
+wallet address
+
+# Firmar transacción
+wallet sign --to <dirección> --value <monto> --nonce <secuencia>
+
+# Verificar transacciones recibidas
+wallet recv --path inbox/
+
+# Listar transacciones
+wallet list
+
+# Estado del wallet
+wallet status
+
+## Estructura de archivos 
+
+cold-wallet/
+├── main.py              # CLI principal
+├── wallet_A.py          # Gestión de claves
+├── wallet_transactions.py # Modelo y firma
+├── wallet_verifier.py   # Verificación
+├── keystore.json        # Keystore (generado)
+├── inbox/              # Transacciones recibidas
+├── outbox/             # Transacciones firmadas
+├── verified/           # Transacciones verificadas
+├── tests/              # Pruebas unitarias
+└── README.md
+
 
