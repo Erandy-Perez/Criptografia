@@ -7,6 +7,7 @@ Implementación de una billetera fría (cold wallet) criptográfica con funciona
 ```bash
 # Clonar repositorio
 git clone https://github.com/SebasEGR/Criptografia.git
+cd cold-wallet
 
 # Instalar dependencias
 pip install -r requirements.txt
