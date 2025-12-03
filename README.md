@@ -7,7 +7,6 @@ Implementación de una billetera fría (cold wallet) criptográfica con funciona
 ```bash
 # Clonar repositorio
 git clone https://github.com/SebasEGR/Criptografia.git
-cd cold-wallet
 
 # Instalar dependencias
 pip install -r requirements.txt
@@ -27,7 +26,7 @@ wallet address
 # Firmar transacción
 wallet sign --to <dirección> --value <monto> --nonce <secuencia>
 
-# Verificar transacciones recibidas
+# Verificar transacciones recibidas (Copia manualmente la firma de outbox en la carpeta inbox)
 wallet recv --path inbox/
 
 # Listar transacciones
@@ -39,7 +38,7 @@ wallet status
 # Estructura de archivos
 
 ``` bash
-cold-wallet/
+Proyecto/
 ├── main.py              # CLI principal
 ├── wallet_A.py          # Gestión de claves
 ├── wallet_transactions.py # Modelo y firma
@@ -49,4 +48,4 @@ cold-wallet/
 ├── outbox/             # Transacciones firmadas
 ├── verified/           # Transacciones verificadas
 ├── tests/              # Pruebas unitarias
-└── README.md
+README.md
