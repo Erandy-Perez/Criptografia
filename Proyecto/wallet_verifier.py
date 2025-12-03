@@ -4,7 +4,7 @@ import hashlib
 from datetime import datetime
 import cryptography.hazmat.primitives.asymmetric.ed25519 as ed_module
 from cryptography.exceptions import InvalidSignature
-
+nonce_tracker = {}
 
 #pubkey_b64 y sig_scheme
   
@@ -200,7 +200,7 @@ def process_transaction(tx_dict, pubkey_bytes, signature_bytes, canonical_tx):
 
 if __name__ == "__main__":
 
-    nonce_tracker = {}
+    
 
     while True:
 

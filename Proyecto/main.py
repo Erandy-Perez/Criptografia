@@ -7,6 +7,7 @@ Cryptography 2026-1
 import os
 import sys
 import json
+import hashlib
 import argparse
 from datetime import datetime
 from pathlib import Path
@@ -136,8 +137,7 @@ class ColdWalletCLI:
         canonical_tx = canonical_signed_json(tx_dict)
         
         # Usar el tracker de nonce del módulo verifier
-        from wallet_verifier import check_source_sequence
-        self.nonce_tracker[tx_dict["from"]] = int(tx_dict["nonce"])
+       
         
         if process_transaction(tx_dict, pubkey_bytes, signature_bytes, canonical_tx):
             # Mover a directorio verified
