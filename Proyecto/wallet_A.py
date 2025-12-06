@@ -180,6 +180,37 @@ def create_keystore(passphrase: str) -> dict:
     return keystore
 
 
+
+
+def verify_keystore_checksum(keystore: dict) -> None:
+    """
+    Verifica la integridad del keystore usando el campo 'checksum'.
+
+    Lanza ValueError si:
+    - No existe el checksum
+    - El formato no es soportado
+    - El hash recalculado no coincide
+    """
+    if "checksum" not in keystore:
+        raise ValueError("Keystore does not contain checksum.")
+
+    stored = keystore["checksum"]
+    if not stored.startswith("SHA256:"):
+        raise ValueError("Unsupported checksum format.")
+
+    stored_sum = stored.split(":", 1)[1]
+
+    # Clonamos el dict sin el checksum para recalcular el hash
+    tmp = dict(keystore)
+    tmp.pop("checksum", None)
+
+    recalculated = hashlib.sha256(
+        json.dumps(tmp, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+    if recalculated != stored_sum:
+        raise ValueError("Keystore integrity check failed.")
+
 # ================================================================
 # Keystore File I/O
 # ================================================================
